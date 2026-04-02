@@ -1,7 +1,10 @@
 import pika
 import random
 import string
+import logging
 from .middleware import MessageMiddlewareQueue, MessageMiddlewareExchange
+
+logger = logging.getLogger(__name__)
 
 class MessageMiddlewareQueueRabbitMQ(MessageMiddlewareQueue):
 
