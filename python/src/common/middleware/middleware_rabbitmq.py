@@ -45,6 +45,39 @@ class MessageMiddlewareQueueRabbitMQ(MessageMiddlewareQueue):
             logger.error(f"Error sending message: {e}")
             raise MessageMiddlewareMessageError(f"Error sending message: {e}")
 
+    def start_consuming(self, on_message_callback):
+        try:
+            if not self.channel:
+                raise MessageMiddlewareDisconnectedError("No active connection to RabbitMQ")
+
+            self.channel.basic_qos(prefetch_count=10)
+
+            logger.info(f"Waiting messages on queue {self.queue_name}...")
+            self.channel.basic_consume(
+                queue=self.queue_name,
+                on_message_callback=self._wrap_callback(on_message_callback),
+                auto_ack=False,
+            )
+            self.channel.start_consuming()
+        except pika.exceptions.AMQPConnectionError as e:
+            logger.error(f"Connection to RabbitMQ lost: {e}")
+            raise MessageMiddlewareDisconnectedError("Connection to RabbitMQ lost")
+        except Exception as e:
+            logger.error(f"Error during message consumption: {e}")
+            raise MessageMiddlewareMessageError(f"Error during message consumption: {e}")
+
+    def _wrap_callback(self, user_callback):
+        def wrapper(ch, method, properties, body):
+            ack = lambda: ch.basic_ack(delivery_tag=method.delivery_tag)
+            nack = lambda: ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+            try:
+                user_callback(body, ack, nack)
+            except Exception as e:
+                logger.error(f"Error in callback: {e}")
+                nack()
+
+        return wrapper
+
 class MessageMiddlewareExchangeRabbitMQ(MessageMiddlewareExchange):
     
     def __init__(self, host: str, exchange_name: str, routing_keys: list):
@@ -84,3 +117,47 @@ class MessageMiddlewareExchangeRabbitMQ(MessageMiddlewareExchange):
         except Exception as e:
             logger.error(f"Error sending message: {e}")
             raise MessageMiddlewareMessageError(f"Error sending message: {e}")
+
+    def start_consuming(self, on_message_callback):
+        try:
+            if not self.channel:
+                raise MessageMiddlewareDisconnectedError("No active connection to RabbitMQ")
+
+            self.consumer_queue = self.channel.queue_declare(queue='', exclusive=True).method.queue
+
+            for route_key in self.routing_keys:
+                self.channel.queue_bind(
+                    exchange=self.exchange_name,
+                    queue=self.consumer_queue,
+                    routing_key=route_key,
+                )
+
+            self.channel.basic_qos(prefetch_count=1)
+
+            logger.info(
+                f"Waiting messages on exchange {self.exchange_name} with routing keys {self.routing_keys}..."
+            )
+            self.channel.basic_consume(
+                queue=self.consumer_queue,
+                on_message_callback=self._wrap_callback(on_message_callback),
+                auto_ack=False,
+            )
+            self.channel.start_consuming()
+        except pika.exceptions.AMQPConnectionError as e:
+            logger.error(f"Connection to RabbitMQ lost: {e}")
+            raise MessageMiddlewareDisconnectedError("Connection to RabbitMQ lost")
+        except Exception as e:
+            logger.error(f"Error during message consumption: {e}")
+            raise MessageMiddlewareMessageError(f"Error during message consumption: {e}")
+
+    def _wrap_callback(self, user_callback):
+        def wrapper(ch, method, properties, body):
+            ack = lambda: ch.basic_ack(delivery_tag=method.delivery_tag)
+            nack = lambda: ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+            try:
+                user_callback(body, ack, nack)
+            except Exception as e:
+                logger.error(f"Error in callback: {e}")
+                nack()
+
+        return wrapper
