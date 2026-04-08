@@ -1,8 +1,7 @@
 import pika
-import random
-import string
 import logging
 from .middleware import (
+    MessageMiddlewareCloseError,
     MessageMiddlewareDisconnectedError,
     MessageMiddlewareQueue,
     MessageMiddlewareExchange,
@@ -77,6 +76,24 @@ class MessageMiddlewareQueueRabbitMQ(MessageMiddlewareQueue):
                 nack()
 
         return wrapper
+
+    def stop_consuming(self):
+        try:
+            if self.channel:
+                self.channel.stop_consuming()
+                logger.info("Consumption stopped")
+        except Exception as e:
+            logger.error(f"Error stopping consumption: {e}")
+            raise MessageMiddlewareMessageError(f"Error stopping consumption: {e}")
+
+    def close(self):
+        try:
+            if self.connection:
+                self.connection.close()
+                logger.info("Connection to RabbitMQ closed")
+        except Exception as e:
+            logger.error(f"Error closing connection: {e}")
+            raise MessageMiddlewareCloseError(f"Error closing connection: {e}")
 
 class MessageMiddlewareExchangeRabbitMQ(MessageMiddlewareExchange):
     
@@ -161,3 +178,21 @@ class MessageMiddlewareExchangeRabbitMQ(MessageMiddlewareExchange):
                 nack()
 
         return wrapper
+
+    def stop_consuming(self):
+        try:
+            if self.channel:
+                self.channel.stop_consuming()
+                logger.info("Consumption stopped")
+        except Exception as e:
+            logger.error(f"Error stopping consumption: {e}")
+            raise MessageMiddlewareMessageError(f"Error stopping consumption: {e}")
+
+    def close(self):
+        try:
+            if self.connection:
+                self.connection.close()
+                logger.info("Connection to RabbitMQ closed")
+        except Exception as e:
+            logger.error(f"Error closing connection: {e}")
+            raise MessageMiddlewareCloseError(f"Error closing connection: {e}")
