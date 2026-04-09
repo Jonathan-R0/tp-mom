@@ -111,11 +111,11 @@ class MessageMiddlewareExchangeRabbitMQ(MessageMiddlewareExchange):
         try:
             self.connection = pika.BlockingConnection(pika.ConnectionParameters(host=self.host))
             self.channel = self.connection.channel()
-            self.channel.exchange_declare(exchange=self.exchange_name, exchange_type='topic', durable=True)
+            self.channel.exchange_declare(exchange=self.exchange_name, exchange_type='direct', durable=True)
             logger.info(f"Connected to RabbitMQ. Exchange declared: {self.exchange_name}")
         except pika.exceptions.AMQPConnectionError as e:
             logger.error(f"Error connecting to RabbitMQ: {e}")
-            raise MessageMiddlewareDisconnectedError("Could not connect tos RabbitMQ")
+            raise MessageMiddlewareDisconnectedError("Could not connect to RabbitMQ")
 
     def send(self, message: str, routing_key: str = None):
         try:
